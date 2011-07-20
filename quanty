@@ -1,0 +1,98 @@
+#!/usr/bin/perl -w
+
+###
+### Written by Ben Burnett <burnett aT cs DoT uleth dOT ca>
+###
+### The words (wherds), accidental insight (axedental incites),
+### unreferenced sources (unreffernced) are mine, the the work is for
+### the public.
+###
+### Licensed (Licencsed) under GPLv3 or any later version.
+###
+
+# http://search.cpan.org/~aqumsieh/AI-Genetic-0.04/Genetic.pm
+
+use strict;
+use warnings;
+use AI::Genetic;
+
+sub cleanfiles {
+  unlink "qtable", "standard.jpeg", "generated.jpeg";
+}
+
+sub abort {
+  #cleanfiles;
+  die @_;
+}
+
+sub handler {
+  my $sig = @_;
+  abort("Killed by SIG$sig.\n");
+}
+
+#$SIG{'HUP'} = 'handler';
+#$SIG{'INT'} = 'handler';
+#$SIG{'QUIT'} = 'handler';
+#$SIG{'TERM'} = 'handler';
+
+sub usage {
+  printf "usage: quanty <quality> <jpegfile>";
+  exit 1;
+}
+
+if ($#ARGV != 1) {
+  usage;
+}
+
+my $quality = int($ARGV[0]);
+my $filename = $ARGV[1];
+
+unless (-e $filename) {
+  abort("File $filename does not exist.\n");
+}
+
+system "cjpeg -quality 100 -outfile original.jpeg $filename";
+system "cjpeg -quality $quality -outfile standard.jpeg $filename";
+
+sub matrix_fitness {
+  my $genes = shift;
+  #print "@$genes\n";
+  open(TABLE, ">qtable") or abort("Can't create temporary (TABLE) file in current directory.\n");
+  print TABLE "@$genes\n";
+  close(TABLE) or abort("Failed to write temporary (TABLE) file in current directory.\n");
+  system "cjpeg -quality $quality -qtables qtable -outfile generated.jpeg $filename 2>/dev/null";
+  my ($standard, $generated, $ratio) = split / /, `./compare original.jpeg standard.jpeg generated.jpeg`;
+  my $ratio_error = abs(1.0-$ratio);
+  my $fitness = $standard-$generated;
+  if ($ratio_error > 0.5) {
+    $fitness -= 500;
+  }  
+  print "$fitness ($standard-$generated) => $ratio ($ratio_error)\n";
+  return $fitness;
+}
+
+sub terminate_fitness {
+  my $ga = shift;
+  return 1 if $ga->getFittest->score > 2;
+  return 0;
+}
+
+my $ga = new AI::Genetic(-population => 100,
+			 -crossover  => 0.99,
+			 -mutation   => 0.01,
+			 -fitness    => \&matrix_fitness,
+			 -type       => 'rangevector',
+			 -terminate  => \&terminate_fitness);
+
+my @gene;
+for my $i (1 .. 64) {
+  push @gene, [0, 255];
+}
+
+$ga->init([@gene]);
+$ga->evolve('rouletteUniform', 1000);
+print "Best score = ", $ga->getFittest->score(), ".\n";
+print "Best qtable = ", $ga->getFittest->genes(), ".\n";
+
+#cleanfiles;
+

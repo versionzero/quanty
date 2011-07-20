@@ -1,0 +1,270 @@
+/*
+ * A program that reads a PGM file and compresses it with the given
+ * JPEG parameters.
+ *
+ * Usage:
+ *
+ *   subjectivity input.pgm start end
+ *
+ * Ben Bunett
+ *
+ */
+
+#include "image.h"
+#include "macro.h"
+#include "measure.h"
+#include "random.h"
+
+#include <cstdio>
+#include <cmath>
+#include <cstdlib>
+#include <iostream>
+#include <iomanip>
+#include <algorithm>
+
+using namespace std;
+
+/* the program's name */
+const char *program_name = NULL;
+
+
+/* prints the usage information for the application */
+void
+usage()
+{
+  cerr << "usage: " << program_name << " input.pgm [quality] [save]" << endl;
+  cerr << "  input.pgm - input image." << endl;
+  cerr << "  quality   - (desired) scaling factor for the quantization table" << endl;
+  cerr << "  save      - save a copy of the compressed image (default: false)" << endl;
+  exit(1);
+}
+
+void
+read_table(char const *file_name, unsigned int table[8][8])
+{
+  int r, c;
+  
+  /* open the output file */
+  if ((file = fopen(file_name, "r")) == NULL) {
+    cerr << "Cannot open file \"" << file_name << "\" for reading." << endl;
+    exit(1);
+  }
+  
+  /* read table */
+  for (r = 0; r < 7; ++r) {
+    for (c = 0; c < 7; ++c) {
+      fscanf("%d", table[r][c]);
+    }
+  }
+  
+  fclose(file);
+}
+
+void
+read_image(char *file_name, const RAW_IMAGE &destination)
+{
+  jpeg_decompress_struct information, *jpeg;
+  jpeg_error_mgr         jerr;
+  JSAMPROW               row[1];
+  unsigned int           stride, height, width;
+
+  /* shorten some names for convenience */
+  stride = source.width();
+  width  = source.width();
+  height = source.height();
+  
+  /* open the output file */
+  if ((file = fopen(file_name, "rb")) == NULL) {
+    cerr << "Cannot open file \"" << file_name << "\" for reading." << endl;
+    exit(1);
+  }
+  
+  /* use the default error handler */
+  jpeg      = &information;
+  jpeg->err = jpeg_std_error(&jerr);
+  jpeg_create_decompress(jpeg);
+  
+  /* set the source to be a the file */
+  jpeg_stdio_src(jpeg, file);
+  
+  /* read  JPEG parameters */  
+  jpeg_read_header(jpeg, TRUE);
+  
+  /* decompress the JPEG image */
+  jpeg_start_decompress(jpeg);
+  while (jpeg->output_scanline < height) {
+    row[0] = &destination.buffer[jpeg->output_scanline*stride];
+    jpeg_read_scanlines(jpeg, row, 1);
+  }
+  
+  /* clean up */
+  jpeg_finish_decompress(jpeg);
+  jpeg_destroy_decompress(jpeg);
+  fclose(file);
+}
+
+void 
+write_image(char *file_name, const RAW_IMAGE &source, const unsigned int table[8][8], int quality)
+{
+  FILE                 *file;
+  jpeg_compress_struct information, *jpeg;
+  jpeg_error_mgr       jerr;
+  JSAMPROW             row[1];
+  unsigned int         stride, height, width;
+  const unsigned int   *p;
+  
+  /* shorten some names for convenience */
+  stride = source.width();
+  width  = source.width();
+  height = source.height();
+  
+  /* open the output file */
+  if ((file = fopen(file_name, "wb")) == NULL) {
+    cerr << "Cannot open file \"" << file_name << "\" for writing." << endl;
+    exit(1);
+  }
+  
+  /* use the default error handler */
+  jpeg      = &information;
+  jpeg->err = jpeg_std_error(&jerr);
+  jpeg_create_compress(jpeg);
+  
+  /* set some basic JPEG parameters */  
+  jpeg->image_width      = width;
+  jpeg->image_height     = height;
+  jpeg->input_components = 1;
+  jpeg->in_color_space   = JCS_GRAYSCALE;
+  
+  /* set compression parameters (i.e. no compression) */
+  jpeg_set_defaults(jpeg);
+  
+  /* set the percentage scaling factor for an quantization table
+     (using IJG-recommended scaling curve) with the given quantization
+     table */
+  quality = jpeg_quality_scaling(quality);
+  p = reinterpret_cast<const unsigned int*>(table);
+  jpeg_add_quant_table(jpeg, 0, p, quality, TRUE);
+  
+  /* set the destination to be a file */
+  jpeg_stdio_dest(jpeg, file);
+  
+  /* compress the JPEG image */
+  jpeg_start_compress(jpeg, TRUE);
+  while (jpeg->next_scanline < height) {
+    row[0] = &source.buffer[jpeg->next_scanline*stride];
+    jpeg_write_scanlines(jpeg, row, 1);
+  }
+  
+  /* clean up */
+  jpeg_finish_compress(jpeg);
+  jpeg_destroy_compress(jpeg);
+  fclose(file);
+}
+
+int
+main(int argc, char *argv[])
+{
+  unsigned int i, j;
+  int          quality;
+  unsigned int table[8][8];
+  char         file_name[512], *base_name, *dot, *qtable_name;
+  RAW_IMAGE    raw_image, decompressed, compressed;
+  
+  /* save the program name */
+  program_name = argv[0];
+  
+  /* check arguments */
+  if (argc < 3) {
+    usage();
+  }
+  
+  /* did the user supply a quality scalar? */
+  desired_quality = atoi(argv[2]);
+  
+  /* quantization table file */
+  qtable_name     = (argc >= 3) ? argv[3] : NULL;
+  
+  /* are we storing the image represenations we are creating? */
+  store           = (argc >= 3) ? atoi(argv[4]) != 0 : false;
+  
+  /* initializes the (netpbm) library */
+  pm_init(argv[0], 0);
+  
+  /* read the image */
+  read_image(argv[1], raw_image);
+  
+  /* determine the appropriate name of the output files */
+  base_name = strrchr(argv[1], '/');
+  if (NULL != base_name && '/' == *base_name) {
+    base_name++;
+  } else {
+    base_name = argv[1];
+  }
+  if (NULL != (dot = strrchr(argv[1], '.'))) {
+    *dot = '\0';
+  }
+  
+  /* create the destination buffer */
+  compressed.create(pgm_image.width(), pgm_image.height());
+  decompressed.create(pgm_image.width(), pgm_image.height());
+  
+  /* we would like to know how the standard quantization matrix
+     performs with respect to bit rate so that we can later pick a
+     scalr value to use with the non-standard matricies such that the
+     bit rate of the images compressed with the non-standard matrices
+     closely matched that of the ones compressed with the standard
+     matrix. */    
+  compress_image(compressed, raw_image, table, desired_quality, true);
+  raw_compressed_size = compressed.size();
+  
+  /* now decompress the image */
+  decompress_image(decompressed, compressed);
+  
+  /* generate all quantization tables and try compressing the input
+     image with them */  
+  for (i = start; i < end; ++i) {
+
+    /* create the quantization table */
+    read_table(quantizationfile, table, i);
+    
+    /* compress the image - note that we want to pick a JPEG quality
+       parameter here that create an image using Q_i such that it is
+       close in bit rate to the image compressed with the standard
+       quantization matrix (we stop after looping 10 times, or if we
+       adjust the "actualy quality" in both directions, since it mean
+       that we were not able to find a satisfactory integer value) */
+    actual_quality         = desired_quality;
+    best_quality           = desired_quality;
+    best_compression_ratio = 100.0; /* unlikely that this will ever be
+				       to considered be the best */
+    previous_direction     = 0;     /* track the direction in which we
+				       are taking the qulity measure,
+				       if we ever switch direction,
+				       then stop looking */
+    for ( j = 1; actual_quality > 0 && actual_quality <= 100; ++j ) {
+      
+      /* compress the image using the spquantization matrix */
+      compress_image(compressed, raw_image, table, actual_quality);
+      
+      /* now decompress the image */
+      decompress_image(decompressed, compressed);
+
+    /* save a copy of the image */
+    if (store) {
+      sprintf(file_name, "%s.%d.%d.jpeg", base_name, best_quality, i);
+      write_image(file_name, raw_image, table, best_quality);
+    }
+
+    /* start printing the output file: seed, spatial frequency,
+       original image size, compressed image size */
+    cout << i+1 << " " 
+	 << actual_quality << " "
+	 << spatial_frequency(decompressed) << " "
+	 << raw_compressed_size << " " 
+	 << compressed.size() << " "
+	 << compression_ratio << " ";
+    
+  }
+  
+  return 0;
+}
