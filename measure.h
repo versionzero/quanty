@@ -4,6 +4,8 @@
 
 #include "image.h"
 
+long double ssim(char const *fn1, char const *fn2);
+
 long double
 spatial_frequency(const RAW_IMAGE &source);
 

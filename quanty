@@ -63,8 +63,8 @@ sub matrix_fitness {
   system "cjpeg -quality $quality -qtables qtable -outfile generated.jpeg $filename 2>/dev/null";
   my ($standard, $generated, $ratio) = split / /, `./compare original.jpeg standard.jpeg generated.jpeg`;
   my $ratio_error = abs(1.0-$ratio);
-  my $fitness = $standard-$generated;
-  if ($ratio_error > 0.5) {
+  my $fitness = $generated-$standard;
+  if ($ratio_error > 0.2) {
     $fitness -= 500;
   }  
   print "$fitness ($standard-$generated) => $ratio ($ratio_error)\n";
@@ -73,13 +73,13 @@ sub matrix_fitness {
 
 sub terminate_fitness {
   my $ga = shift;
-  return 1 if $ga->getFittest->score > 2;
+  return 1 if $ga->getFittest->score() > 0;
   return 0;
 }
 
 my $ga = new AI::Genetic(-population => 100,
-			 -crossover  => 0.99,
-			 -mutation   => 0.01,
+			 -crossover  => 0.95,
+			 -mutation   => 0.05,
 			 -fitness    => \&matrix_fitness,
 			 -type       => 'rangevector',
 			 -terminate  => \&terminate_fitness);
@@ -92,7 +92,9 @@ for my $i (1 .. 64) {
 $ga->init([@gene]);
 $ga->evolve('rouletteUniform', 1000);
 print "Best score = ", $ga->getFittest->score(), ".\n";
-print "Best qtable = ", $ga->getFittest->genes(), ".\n";
+matrix_fitness(scalar $ga->getFittest->genes);
+my $genes = (scalar $ga->getFittest->genes);
+print "Best qtable = ", @$genes, ".\n";
 
 #cleanfiles;
 

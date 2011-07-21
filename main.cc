@@ -31,7 +31,7 @@ main(int argc, char *argv[])
 {
   long double m1, m2, ratio;
   char        c;
-  char        *name;
+  char        *name, *name1, *name2;
   RAW_IMAGE   original, standard, generaged;
   struct stat status;
   
@@ -58,6 +58,23 @@ main(int argc, char *argv[])
       break;
     }
   }
+  
+  name1 = argv[optind++];
+  name2 = argv[optind++];
+  m1 = ssim(name1, name2); // original, standard
+  
+  stat(name2, &status);
+  ratio = status.st_size;
+  
+  name2 = argv[optind++];
+  m2 = ssim(name1, name2); // original, generaged
+  
+  stat(name2, &status);
+  ratio /= status.st_size;
+  
+  printf("%Lf %Lf %Lf", m1, m2, ratio);
+  
+  return 0;
   
   name = argv[optind++];
   read_image(name, original);
