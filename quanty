@@ -54,6 +54,10 @@ unless (-e $filename) {
 system "cjpeg -quality 100 -outfile original.jpeg $filename";
 system "cjpeg -quality $quality -outfile standard.jpeg $filename";
 
+my $original_size = (stat("original.jpeg"))[7];
+my $standard_size = (stat("standard.jpeg"))[7];
+my $standard_fitness =`./compare original.jpeg standard.jpeg`;
+
 sub matrix_fitness {
   my $genes = shift;
   #print "@$genes\n";
@@ -61,13 +65,15 @@ sub matrix_fitness {
   print TABLE "@$genes\n";
   close(TABLE) or abort("Failed to write temporary (TABLE) file in current directory.\n");
   system "cjpeg -quality $quality -qtables qtable -outfile generated.jpeg $filename 2>/dev/null";
-  my ($standard, $generated, $ratio) = split / /, `./compare original.jpeg standard.jpeg generated.jpeg`;
+  my $ratio = $standard_size;
+  $ratio /= (stat("generated.jpeg"))[7];
   my $ratio_error = abs(1.0-$ratio);
-  my $fitness = $generated-$standard;
-  if ($ratio_error > 0.2) {
-    $fitness -= 500;
-  }  
-  print "$fitness ($standard-$generated) => $ratio ($ratio_error)\n";
+  my $fitness = `./compare original.jpeg generated.jpeg`-$standard_fitness;
+  printf ".";
+  if ($ratio_error > 0.1) {
+    return -10;
+  }
+  printf "!($fitness)";
   return $fitness;
 }
 
@@ -77,7 +83,7 @@ sub terminate_fitness {
   return 0;
 }
 
-my $ga = new AI::Genetic(-population => 100,
+my $ga = new AI::Genetic(-population => 50,
 			 -crossover  => 0.95,
 			 -mutation   => 0.05,
 			 -fitness    => \&matrix_fitness,
@@ -90,11 +96,11 @@ for my $i (1 .. 64) {
 }
 
 $ga->init([@gene]);
-$ga->evolve('rouletteUniform', 1000);
-print "Best score = ", $ga->getFittest->score(), ".\n";
+$ga->evolve('rouletteUniform', 200);
+print "\nBest score = ", $ga->getFittest->score(), ".\n";
 matrix_fitness(scalar $ga->getFittest->genes);
 my $genes = (scalar $ga->getFittest->genes);
-print "Best qtable = ", @$genes, ".\n";
+print "\nBest qtable = ", @$genes, ".\n";
 
 #cleanfiles;
 

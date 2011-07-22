@@ -29,11 +29,9 @@ verbosity::type_t noisiness;
 int
 main(int argc, char *argv[])
 {
-  long double m1, m2, ratio;
+  long double measure;
   char        c;
-  char        *name, *name1, *name2;
-  RAW_IMAGE   original, standard, generaged;
-  struct stat status;
+  char        *name1, *name2;
   
   /* save the program name */
   tool_name = argv[0];
@@ -61,21 +59,13 @@ main(int argc, char *argv[])
   
   name1 = argv[optind++];
   name2 = argv[optind++];
-  m1 = ssim(name1, name2); // original, standard
+  measure = ssim(name1, name2);
   
-  stat(name2, &status);
-  ratio = status.st_size;
-  
-  name2 = argv[optind++];
-  m2 = ssim(name1, name2); // original, generaged
-  
-  stat(name2, &status);
-  ratio /= status.st_size;
-  
-  printf("%Lf %Lf %Lf", m1, m2, ratio);
+  printf("%Lf", measure);
   
   return 0;
-  
+
+#if 0  
   name = argv[optind++];
   read_image(name, original);
     
@@ -97,4 +87,6 @@ main(int argc, char *argv[])
   printf("%Lf %Lf %Lf", m1, m2, ratio);
   
   return 0;
+#endif
+
 }
