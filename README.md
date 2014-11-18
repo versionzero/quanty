@@ -3,8 +3,13 @@ installed like so:
 
     perl -MCPAN -e 'install AI::Genetic'
 
-The perl script depends on an executable ''compare'', which can be
-built with the following command line:
+The perl script depends on an executable ''compare'', which depends on
+the the ''netpbm'' and ''openjpg'' libraries; if you're using OS X,
+they can be installed like so:
+
+    $ brew install netpbm openjpeg
+
+The ''compare'' binary can be built with the following command line:
 
     $ make
 
